@@ -1,7 +1,7 @@
 #!/usr/local/bin/expect
 
-set USERNAME ppbhatta
-set PASSWORD $env(PASSWORD)
+set USERNAME $env(USER_NAME)
+set PASSWORD $env(PASS_WORD)
 set timeout 2
 
 set FILENAME [lindex $argv 0];
@@ -12,7 +12,7 @@ if { ! [file exists $FILENAME]} {
   exit 1
 }
 
-set result [exec /Users/promit/scripts/lookup_bastion $DBHOST]
+set result [exec ~/scripts/lookup_bastion $DBHOST]
 set output_array [split $result ";"]
 
 set BASTION [lindex $output_array 0];
@@ -24,7 +24,7 @@ expect {
         exp_continue
     }
     "assword:" {
-        send "$PASSWORD\r"
+        send "$PASS_WORD\r"
         exp_continue
     }
 }
