@@ -1,0 +1,110 @@
+#!/usr//bin/env expect
+
+# global
+set timeout 3
+set TARGET_HOST [lindex $argv 0]
+set PROMPT "~]$"
+set pattern "^ERROR.*"
+
+# validates inputs
+proc validate_input { TARGET_HOST } {
+  if { $::USER_NAME == "" } {
+    return "ERROR: username not found. Please set USER_NAME env variable in your current shell and rerun"
+  }
+
+  if { $::PASS_WORD == "" } {
+    return "ERROR: password not found. Please set PASS_WORD env variable in your current shell and rerun"
+  }
+  if { $TARGET_HOST == "" } {
+    return "ERROR ./ssh_to_host host.to.loginto"
+  }
+}
+
+# logs in to host
+proc handle_login_to_host { HOST_NAME SSH_OPTIONS SPWAN } {
+
+  if { "$SPWAN" == "yes" } {
+    spawn ssh "$SSH_OPTIONS" $::USER_NAME@$HOST_NAME
+  } else {
+    send "ssh \"$SSH_OPTIONS\" $::USER_NAME@$HOST_NAME\n"
+  }
+
+  expect {
+      "assword: " {
+          send "$::PASS_WORD\n"
+          expect {
+            "$::PROMPT" { }
+          }
+      }
+      "(yes/no)? " {
+          send "yes\n"
+          expect {
+            "$::PROMPT" { }
+          }
+          exp_continue
+      }
+      "denied" {
+          return "ERROR: Login failed to host $HOST_NAME for user $::USER_NAME with password $::PASS_WORD"
+      }
+      default {
+          return "ERROR:Login failed to host $HOST_NAME for user $::USER_NAME with password $::PASS_WORD"
+      }
+      timeout {
+          return "ERROR: Login timed out to host $HOST_NAME for user $::USER_NAME with password $::PASS_WORD"
+      }
+  }
+  if { [info exists spawn_id] } {
+    return $spawn_id
+  }
+}
+
+# actually does sudo
+proc sudo_to_root { } {
+
+  send "sudo su -\n"
+  expect {
+    "assword for $::USER_NAME" {
+        send "$::PASS_WORD\r"
+        expect "$::PROMPT"
+    }
+  }
+  send "clear\n"
+
+}
+
+#
+# MAIN PROGRAM BEGINS HERE
+# set the env variable USERNAME to the USER NAME and PASSWORD to PASSWORD in your shell's login profile
+#
+set SSH_OPTIONS "-R 52999:127.0.0.1:52999"
+set USER_NAME $::env(USER_NAME)
+set PASS_WORD $::env(PASS_WORD)
+
+set is_valid_input [validate_input $TARGET_HOST]
+if { [regexp $pattern $is_valid_input match] } {
+  send_user "$is_valid_input\n"
+  exit
+}
+
+#
+# run the lookup_bastion script to get the bastion and jump hostname
+#
+set HOST [lindex $argv 0]
+set result [exec /Users/promit/scripts/lookup_bastion $HOST]
+set output_array [split $result ";"]
+set FIRST_BASTION [lindex $output_array 0];
+set DBA_JUMP [lindex $output_array 1];
+
+set ssh_spwan [handle_login_to_host $FIRST_BASTION $SSH_OPTIONS "yes"]
+if { [regexp $pattern $ssh_spwan match] } {
+  send_user "$ssh_spwan\n"
+  exit
+}
+set spawn_id $ssh_spwan
+
+set jump_host [handle_login_to_host $DBA_JUMP $SSH_OPTIONS '']
+if { [regexp $pattern $ssh_spwan match] } {
+  send_user "Failed to login to host $DBA_JUMP\n"
+  exit
+}
+interact
